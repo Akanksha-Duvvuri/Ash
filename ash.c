@@ -101,34 +101,6 @@ int handleRedirection(char *args[]){
     return 0;
 }
 
-void executeCommand(char *args[]){
-    pid_t pid = fork();
-
-    if(pid < 0){
-        perror("fork");
-        return;
-    } else if(pid == 0){
-        if(handleRedirection(args) == -1){
-            _exit(1);
-        }
-
-        execvp(args[0], args);
-        perror("execvp");
-        _exit(127);
-    } else {
-        int status;
-        pid_t result;
-
-        do{
-            result = waitpid(pid, &status, 0);
-        } while (result == -1 && errno == EINTR);
-
-        if(result == -1) {
-            perror("waitpid");
-        }
-    }
-}
-
 void changeDirectory(char *args[]){
     char *path;
 
@@ -169,6 +141,154 @@ void printHelp(){
     printf("The commands are executed using fork() and execvp() \n");
 }
 
+
+void executeCommand(char *args[]){
+    pid_t pid = fork();
+
+    if(pid < 0){
+        perror("fork");
+        return;
+    } else if(pid == 0){
+        if(handleRedirection(args) == -1){
+            _exit(1);
+        }
+
+        execvp(args[0], args);
+        perror("execvp");
+        _exit(127);
+    } else {
+        int status;
+        pid_t result;
+
+        do{
+            result = waitpid(pid, &status, 0);
+        } while (result == -1 && errno == EINTR);
+
+        if(result == -1) {
+            perror("waitpid");
+        }
+    }
+}
+
+
+void executePipe(char *args[]) {
+    int pipeIndex = -1;
+
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            pipeIndex = i;
+            break;
+        }
+    }
+
+    if (pipeIndex <= 0 || args[pipeIndex + 1] == NULL) {
+        fprintf(stderr, "invalid pipe syntax\n");
+        return;
+    }
+
+    args[pipeIndex] = NULL;
+    char **left = args;
+    char **right = &args[pipeIndex + 1];
+
+    for (int i = 0; right[i] != NULL; i++) {
+        if (strcmp(right[i], "|") == 0) {
+            fprintf(stderr,
+                    "multiple pipes not supported\n");
+            return;
+        }
+    }
+
+    int pipefd[2];
+
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        return;
+    }
+
+    pid_t pid1 = fork();
+
+    if (pid1 < 0) {
+        perror("fork");
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return;
+    }
+
+    if (pid1 == 0) {
+        close(pipefd[0]);
+        if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+            perror("dup2");
+            _exit(1);
+        }
+
+        close(pipefd[1]);
+
+        if (handleRedirection(left) == -1) {
+            _exit(1);
+        }
+
+        execvp(left[0], left);
+        perror("execvp");
+        _exit(127);
+    }
+
+    pid_t pid2 = fork();
+
+    if (pid2 < 0) {
+        perror("fork");
+
+        close(pipefd[0]);
+        close(pipefd[1]);
+
+        while (waitpid(pid1, NULL, 0) == -1) {
+            if (errno != EINTR) {
+                perror("ash: waitpid");
+                break;
+            }
+        }
+
+        return;
+    }
+
+    if (pid2 == 0) {
+        close(pipefd[1]);
+
+        if (dup2(pipefd[0], STDIN_FILENO) == -1) {
+            perror("ash: dup2");
+            _exit(1);
+        }
+
+        close(pipefd[0]);
+
+        if (handleRedirection(right) == -1) {
+            _exit(1);
+        }
+
+        execvp(right[0], right);
+
+        perror("ash: execvp");
+        _exit(127);
+    }
+
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    while (waitpid(pid1, NULL, 0) == -1) {
+        if (errno != EINTR) {
+            perror("ash: waitpid");
+            break;
+        }
+    }
+
+    while (waitpid(pid2, NULL, 0) == -1) {
+        if (errno != EINTR) {
+            perror("ash: waitpid");
+            break;
+        }
+    }
+}
+
+
 int main(){
     char input[MAX_INPUT];
 
@@ -207,9 +327,24 @@ int main(){
             printWorkingDirectory();
         }else if(strcmp(args[0], "help") == 0){
             printHelp();
-        } else {
-            executeCommand(args);
+        }else {
+            int hasPipe = 0;
+            for (int i = 0; args[i] != NULL; i++) {
+                if (strcmp(args[i], "|") == 0) {
+                    hasPipe = 1;
+                    break;
+                }
+            }
+
+            if (hasPipe) {
+                executePipe(args);
+            }
+
+            else {
+                executeCommand(args);
+            }
         }
+
     }
 
     return 0;
