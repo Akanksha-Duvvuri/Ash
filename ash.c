@@ -4,6 +4,7 @@
 #include<sys/types.h>
 #include<sys/wait.h>
 #include<errno.h>
+#include<stdlib.h>
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
@@ -61,6 +62,51 @@ void executeCommand(char *args[]){
     }
 }
 
+void changeDirectory(char *args[]){
+    char *path;
+
+    if(args[1] == NULL){
+        path = getenv("HOME");
+
+        if(path == NULL){
+            fprintf(stderr, "ash: Home not set\n");
+            return;
+        }
+    }else {
+        path = args[1];
+    }
+
+    if(chdir(path) != 0){
+        perror("ash: cd");
+    }
+}
+
+void printWorkingDirectory(){
+    char cwd[1024];
+
+    if(getcwd(cwd, sizeof(cwd)) == NULL){
+        perror("ash: pwd");
+        return;
+    }
+
+    printf("%s\n", cwd);
+}
+
+void printHelp(){
+    printf("Built in commands that are supported by this shell");
+
+    printf("  cd              Change working directory\n");
+    printf("  pwd             Print working directory\n");
+    printf("  help            Display this help message\n");
+    printf("  exit            Exit the shell\n");
+
+    printf("External Commands supported by the shell: \n");
+
+    printf("ls, date, echo, cat, gcc, etc...\n");
+
+    printf("The commands are executed using fork() and execvp() \n");
+}
+
 int main(){
     char input[MAX_INPUT];
 
@@ -93,9 +139,15 @@ int main(){
 
         if(strcmp(args[0], "exit") == 0){
             break;
+        }else if(strcmp(args[0], "cd") == 0){
+            changeDirectory(args);
+        }else if(strcmp(args[0], "pwd") == 0){
+            printWorkingDirectory();
+        }else if(strcmp(args[0], "help") == 0){
+            printHelp();
+        } else {
+            executeCommand(args);
         }
-
-        executeCommand(args);
     }
 
     return 0;
