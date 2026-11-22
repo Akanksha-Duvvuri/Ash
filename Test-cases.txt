@@ -1,0 +1,27 @@
+Test Cases
+
++-------+------------------------------+---------------------------------------+--------------+
+| ID    | Command                      | Expected Result                       | Result       |
++-------+------------------------------+---------------------------------------+--------------+
+| TC01  | pwd                          | Show working directory                | Pass         |
+| TC02  | ls                           | List files                            | Pass         |
+| TC03  | echo Hello world             | Print Hello world                     | Pass         |
+| TC04  | date                         | Display date/time                     | Pass         |
+| TC05  | help                         | Show available commands               | Pass         |
+| TC06  | cd /tmp, then pwd            | Show /tmp                             | Pass         |
+| TC07  | cd, then pwd                 | Return to home directory              | Pass         |
+| TC08  | cd /random                   | Show error                            | Pass         |
+| TC09  | echo hello > test.txt        | Create file                           | Pass         |
+| TC10  | echo world >> test.txt       | Append text                           | Pass         |
+| TC11  | wc -l < test.txt             | Output 2                              | Pass         |
+| TC12  | echo hello world | wc -w     | Output 2                              | Pass         |
+| TC13  | printf hello | wc -c         | Output 5                              | Pass         |
+| TC14  | ls | sort                    | Sorted file listing                   | Pass         |
+| TC15  | sleep 5 &                    | Return prompt immediately             | Pass         |
+| TC16  | fakecommand123               | Display execution error               | Pass         |
+| TC17  | echo hello >                 | Missing filename error                | Pass         |
+| TC18  | echo hello |                 | Invalid pipe error                    | Pass         |
+| TC19  | echo hello | wc | cat        | Unsupported multiple pipes            | Pass         |
+| TC20  | sleep 30, then Ctrl+C        | Interrupt command; shell survives     | Pass         |
+| TC21  | echo hello after Ctrl+C      | Print hello                           | Pass         | 
++-------+------------------------------+---------------------------------------+--------------+
