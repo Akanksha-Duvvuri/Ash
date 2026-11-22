@@ -7,6 +7,7 @@
 #include<stdlib.h>
 #include<fcntl.h>
 #include<sys/stat.h>
+#include<signal.h>
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
@@ -142,31 +143,54 @@ void printHelp(){
 }
 
 
-void executeCommand(char *args[]){
+void executeCommand(char *args[], int background) {
     pid_t pid = fork();
-
-    if(pid < 0){
+    if (pid < 0) {
         perror("fork");
         return;
-    } else if(pid == 0){
-        if(handleRedirection(args) == -1){
+    }
+
+    if (pid == 0) {
+        if (background) {
+            int fd = open("/dev/null", O_RDONLY);
+
+            if (fd == -1) {
+                perror("ash: /dev/null");
+                _exit(1);
+            }
+
+            if (dup2(fd, STDIN_FILENO) == -1) {
+                perror("dup2");
+                close(fd);
+                _exit(1);
+            }
+
+            close(fd);
+        }
+
+        if (handleRedirection(args) == -1) {
             _exit(1);
         }
 
         execvp(args[0], args);
         perror("execvp");
         _exit(127);
-    } else {
-        int status;
-        pid_t result;
+    }
 
-        do{
-            result = waitpid(pid, &status, 0);
-        } while (result == -1 && errno == EINTR);
+    if (background) {
+        printf("Background process started: PID %ld\n",(long)pid);
+        return;
+    }
 
-        if(result == -1) {
-            perror("waitpid");
-        }
+    int status;
+    pid_t result;
+
+    do {
+        result = waitpid(pid, &status, 0);
+    } while (result == -1 && errno == EINTR);
+
+    if (result == -1) {
+        perror("waitpid");
     }
 }
 
@@ -288,6 +312,21 @@ void executePipe(char *args[]) {
     }
 }
 
+void reapbackgroundProcess(){
+    int status;
+    pid_t pid;
+
+    while((pid = waitpid(-1, &status, WNOHANG)) > 0){
+        printf("process %ld finished", (long)pid);
+
+        if(WIFEXITED(status)){
+            printf("exit status: %d", WEXITSTATUS(status));
+        }else if(WIFSIGNALED(status)){
+            printf("signal: %d", WTERMSIG(status));
+        }
+        printf("\n");
+    }
+}
 
 int main(){
     char input[MAX_INPUT];
@@ -295,6 +334,8 @@ int main(){
     char *args[MAX_ARGS];
 
     while(1){
+        reapbackgroundProcess();
+
         if (takeInput(input) == 0){
             break;
         }
@@ -315,9 +356,26 @@ int main(){
             continue;
         }
 
-        for(int i=0; args[i] != NULL; i++){
-            printf("args[%d] = %s\n", i, args[i]);
+        int background = 0;
+        int argc = 0;
+
+        while(args[argc] != NULL){
+            argc++;
         }
+
+        if(argc > 0 && strcmp(args[argc - 1], "&") == 0){
+            background = 1;
+            args[argc - 1] = NULL;
+        }
+
+        if(args[0] == NULL){
+            fprintf(stderr, "missing command\n");
+            continue;
+        }
+
+        // for(int i=0; args[i] != NULL; i++){
+        //     printf("args[%d] = %s\n", i, args[i]);
+        // }
 
         if(strcmp(args[0], "exit") == 0){
             break;
@@ -338,10 +396,8 @@ int main(){
 
             if (hasPipe) {
                 executePipe(args);
-            }
-
-            else {
-                executeCommand(args);
+            }else {
+                executeCommand(args, background);
             }
         }
 
