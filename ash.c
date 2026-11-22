@@ -256,7 +256,10 @@ void executeCommand(char *args[], int background) {
     } while (result == -1 && errno == EINTR);
 
     if (result == -1) {
-        perror("waitpid");
+    perror("waitpid");
+    }else if(WIFSIGNALED(status) && WTERMSIG(status) == SIGINT){
+        printf("\n");
+        fflush(stdout);
     }
 }
 
@@ -383,15 +386,12 @@ void reapbackgroundProcess(){
     int status;
     pid_t pid;
 
-    while((pid = waitpid(-1, &status, WNOHANG)) > 0){
-        printf("process %ld finished \n", (long)pid);
+    while(1){
+        pid = waitpid(-1, &status, WNOHANG);
 
-        if(WIFEXITED(status)){
-            printf("\nexit status: %d", WEXITSTATUS(status));
-        }else if(WIFSIGNALED(status)){
-            printf("signal: %d", WTERMSIG(status));
+        if(pid <= 0){
+            break;
         }
-        printf("\n");
     }
 }
 
