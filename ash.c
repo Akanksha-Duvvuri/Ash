@@ -5,6 +5,8 @@
 #include<sys/wait.h>
 #include<errno.h>
 #include<stdlib.h>
+#include<fcntl.h>
+#include<sys/stat.h>
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
@@ -38,6 +40,67 @@ void parseInput(char input[], char *args[]){
     args[i] = NULL;
 }
 
+int handleRedirection(char *args[]){
+    for(int i=0; args[i] != NULL; i++){
+        int fd = -1;
+
+        int target = -1;
+
+        if(strcmp(args[i], ">") == 0){
+            target = STDOUT_FILENO;
+
+            if(args[i+1] == NULL){
+                fprintf(stderr, "missing filename\n");
+                return -1;
+            }
+
+            fd = open(args[i + 1],
+                O_WRONLY | O_CREAT | O_TRUNC, 
+                0644
+            );
+        }else if(strcmp(args[i], ">>") == 0){
+            target = STDOUT_FILENO;
+
+            if(args[i + 1] == NULL){
+                fprintf(stderr, "missing filename\n");
+                return -1;
+            }
+            fd = open(args[i + 1],
+                    O_WRONLY | O_CREAT | O_APPEND,
+                    0644);
+        }else if (strcmp(args[i], "<") == 0) {
+            target = STDIN_FILENO;
+
+            if (args[i + 1] == NULL) {
+                fprintf(stderr, "ash: missing filename\n");
+                return -1;
+            }
+
+            fd = open(args[i + 1], O_RDONLY);
+        } else {
+            continue;
+        }
+
+        if(fd == -1){
+            perror("redirection");
+            return -1;
+        }
+
+        if(dup2(fd, target) == -1){
+            perror("dup2");
+            close(fd);
+            return -1;
+        }
+
+        close(fd);
+
+        args[i] = NULL;
+        break;
+    }
+
+    return 0;
+}
+
 void executeCommand(char *args[]){
     pid_t pid = fork();
 
@@ -45,6 +108,10 @@ void executeCommand(char *args[]){
         perror("fork");
         return;
     } else if(pid == 0){
+        if(handleRedirection(args) == -1){
+            _exit(1);
+        }
+
         execvp(args[0], args);
         perror("execvp");
         _exit(127);
@@ -94,14 +161,9 @@ void printWorkingDirectory(){
 
 void printHelp(){
     printf("Built in commands that are supported by this shell");
-
-    printf("  cd              Change working directory\n");
-    printf("  pwd             Print working directory\n");
-    printf("  help            Display this help message\n");
-    printf("  exit            Exit the shell\n");
+    printf("cd, pwd, help, exit");
 
     printf("External Commands supported by the shell: \n");
-
     printf("ls, date, echo, cat, gcc, etc...\n");
 
     printf("The commands are executed using fork() and execvp() \n");
